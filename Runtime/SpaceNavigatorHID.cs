@@ -6,9 +6,7 @@ using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.InputSystem.Controls;
 using UnityEngine.InputSystem.Layouts;
 using UnityEngine.InputSystem.Utilities;
-#if UNITY_EDITOR
-using UnityEditor;
-#endif
+using System.Threading;
 
 namespace SpaceNavigatorDriver
 {
@@ -32,28 +30,25 @@ namespace SpaceNavigatorDriver
         }
 
         // 1st report
-        [InputControl(name = "translation", format = "VC3S", layout = "Vector3", displayName = "Translation")] 
-        [InputControl(name = "translation/x", offset = 0, format = "SHRT", parameters = "scale=true, scaleFactor=10")] 
+        [InputControl(name = "translation", format = "VC3S", layout = "Vector3", displayName = "Translation")]
+        [InputControl(name = "translation/x", offset = 0, format = "SHRT", parameters = "scale=true, scaleFactor=10")]
         [InputControl(name = "translation/y", offset = 4, format = "SHRT", parameters = "scale=true, scaleFactor=-10")]
         [InputControl(name = "translation/z", offset = 2, format = "SHRT", parameters = "scale=true, scaleFactor=-10")]
         public ReportFormat1 report1;
 
         // 2nd report
-        [InputControl(name = "rotation", format = "VC3S", layout = "Vector3", displayName = "Rotation")] 
-        [InputControl(name = "rotation/x", offset = 0, format = "SHRT", parameters = "scale=true, scaleFactor=-80")] 
-        [InputControl(name = "rotation/y", offset = 4, format = "SHRT", parameters = "scale=true, scaleFactor=80")] 
+        [InputControl(name = "rotation", format = "VC3S", layout = "Vector3", displayName = "Rotation")]
+        [InputControl(name = "rotation/x", offset = 0, format = "SHRT", parameters = "scale=true, scaleFactor=-80")]
+        [InputControl(name = "rotation/y", offset = 4, format = "SHRT", parameters = "scale=true, scaleFactor=80")]
         [InputControl(name = "rotation/z", offset = 2, format = "SHRT", parameters = "scale=true, scaleFactor=80")]
         public ReportFormat2 report2;
 
         // 3rd report
-        [InputControl(name = "button1", bit = 0, format = "BIT", layout = "Button", displayName = "Button 1")] 
+        [InputControl(name = "button1", bit = 0, format = "BIT", layout = "Button", displayName = "Button 1")]
         [InputControl(name = "button2", bit = 1, format = "BIT", layout = "Button", displayName = "Button 2")]
         public ReportFormat3 report3;
     }
 
-#if UNITY_EDITOR
-    [InitializeOnLoad] // Make sure static constructor is called during startup.
-#endif
     [InputControlLayout(stateType = typeof(SpaceNavigatorHIDState))]
     public class SpaceNavigatorHID : InputDevice, IInputStateCallbackReceiver
     {
@@ -61,8 +56,19 @@ namespace SpaceNavigatorDriver
         public ButtonControl Button2 { get; protected set; }
         public Vector3Control Rotation { get; protected set; }
         public Vector3Control Translation { get; protected set; }
-        
-        static SpaceNavigatorHID()
+
+        private static int Initialized = 0;
+
+        public static void Init()
+        {
+            bool wasInitialized = Interlocked.Exchange(ref Initialized, 1) == 1;
+            if (wasInitialized)
+                throw new System.Exception("The class is already initialized");
+            InitNavigator();
+            Application.quitting += Quit;
+        }
+
+        private static void InitNavigator()
         {
 #if !ENABLE_INPUT_SYSTEM
             Debug.LogError("SpaceNavigator Driver cannot function because the <b>New Input System Package</b> is not active !\n" +
@@ -74,19 +80,7 @@ namespace SpaceNavigatorDriver
                     .WithInterface("HID")
                     .WithManufacturer("3Dconnexion.*")
             );
-#if UNITY_EDITOR
-            EditorApplication.quitting += Quit;
-#else
-            Application.quitting += Quit;
-#endif
             DebugLog("SpaceNavigatorHID : RegisterLayout");
-        }
-
-        // In the player, trigger the calling of our static constructor
-        // by having an empty method annotated with RuntimeInitializeOnLoadMethod.
-        [RuntimeInitializeOnLoadMethod]
-        private static void Init()
-        {
         }
 
         private static void Quit()
@@ -94,7 +88,7 @@ namespace SpaceNavigatorDriver
             if (current != null)
                 current.SetLEDStatus(LedStatus.Off);
         }
-        
+
         // FinishSetup is where our device setup is finalized. Here we can look up
         // the controls that have been created.
         protected override void FinishSetup()
@@ -132,7 +126,7 @@ namespace SpaceNavigatorDriver
             SetLEDStatus(LedStatus.Off);
             DebugLog("SpaceNavigatorHID : OnRemoved");
         }
-        
+
         public void OnNextUpdate()
         {
         }
@@ -147,7 +141,7 @@ namespace SpaceNavigatorDriver
             if (stateEventPtr->stateFormat != new FourCC('H', 'I', 'D'))
                 return;
 
-            var reportPtr = (byte*) stateEventPtr->state;
+            var reportPtr = (byte*)stateEventPtr->state;
             var reportId = *reportPtr;
             var reportStatePtr = (reportPtr + 1); // or wherever the actual report starts.
 
@@ -157,7 +151,7 @@ namespace SpaceNavigatorDriver
 
             var newState = default(SpaceNavigatorHIDState);
             // Can opt to only copy the state that we won't override. We don't bother here.
-            UnsafeUtility.MemCpy(&newState, (byte*) currentStatePtr + stateBlock.byteOffset, sizeof(SpaceNavigatorHIDState));
+            UnsafeUtility.MemCpy(&newState, (byte*)currentStatePtr + stateBlock.byteOffset, sizeof(SpaceNavigatorHIDState));
 
             if (reportId == 1)
             {
@@ -187,7 +181,7 @@ namespace SpaceNavigatorDriver
             return false;
         }
 
-#region Status LED
+        #region Status LED
 
         public void SetLEDStatus(LedStatus status)
         {
@@ -223,9 +217,9 @@ namespace SpaceNavigatorDriver
             }
         }
 
-#endregion
+        #endregion
 
-#region Utilities
+        #region Utilities
 
         public static void DebugLog(string _message)
         {
@@ -234,6 +228,6 @@ namespace SpaceNavigatorDriver
 #endif
         }
 
-#endregion
+        #endregion
     }
 }
