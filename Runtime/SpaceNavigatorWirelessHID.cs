@@ -1,10 +1,10 @@
-using UnityEditor;
 using Unity.Collections.LowLevel.Unsafe;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.LowLevel;
 using UnityEngine.InputSystem.Layouts;
 using UnityEngine.InputSystem.Utilities;
+using System.Threading;
 
 namespace SpaceNavigatorDriver
 {
@@ -40,13 +40,20 @@ namespace SpaceNavigatorDriver
         public ReportFormat3 report3;
     }
 
-#if UNITY_EDITOR
-    [InitializeOnLoad] // Make sure static constructor is called during startup.
-#endif
     [InputControlLayout(stateType = typeof(SpaceNavigatorWirelessHIDState))]
     public class SpaceNavigatorWirelessHID : SpaceNavigatorHID
     {
-        static SpaceNavigatorWirelessHID()
+        private static int Initialized = 0;
+
+        public static void WirelessInit()
+        {
+            bool wasInitialized = Interlocked.Exchange(ref Initialized, 1) == 1;
+            if (wasInitialized)
+                throw new System.Exception("The class is already initialized");
+            InitNavigator();
+        }
+
+        private static void InitNavigator()
         {
             // Register a layout with product ID, so this layout will have a higher score than SpaceNavigatorHID
             InputSystem.RegisterLayout<SpaceNavigatorWirelessHID>(
